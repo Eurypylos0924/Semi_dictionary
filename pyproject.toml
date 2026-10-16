@@ -1,0 +1,21 @@
+[project]
+name = "semicon-rag"
+version = "0.1.0"
+description = "반도체 박막 공정 QA 어시스턴트 (논문 RAG)"
+requires-python = ">=3.12"
+dependencies = [
+    "faiss-cpu>=1.15.1",
+    "langchain-nvidia-ai-endpoints>=1.5.0",
+    "numpy>=2.5.4",
+    "python-dotenv>=1.2.4",
+    "requests>=2.34.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
