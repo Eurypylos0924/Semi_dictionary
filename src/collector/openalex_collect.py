@@ -31,6 +31,10 @@ TOPICS = {
     "cmp_defect": '"chemical mechanical planarization" defect',
     "wafer_defect": '"wafer map" defect pattern classification',
     "yield_process": 'semiconductor manufacturing yield "root cause" analysis',
+    # 평가에서 드러난 코퍼스 빈틈 보강: XRD 기본 개념(Scherrer·FWHM·변형률)과 HfO2 누설 메커니즘
+    "xrd_scherrer": '"Scherrer equation" crystallite size',
+    "xrd_williamson_hall": '"Williamson-Hall" strain crystallite size X-ray diffraction',
+    "hfo2_leakage_mechanism": 'HfO2 "leakage current" "conduction mechanism" "Poole-Frenkel"',
 }
 
 
