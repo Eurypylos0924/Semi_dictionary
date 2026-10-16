@@ -6,15 +6,20 @@
 import argparse
 
 from src.rag.generator import answer
+from src.rag.llm import get_llm, resolve
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="논문 근거 QA")
     parser.add_argument("question")
     parser.add_argument("-k", type=int, default=5, help="근거로 검토할 논문 수")
+    parser.add_argument("--provider", help="gemini | nvidia | ollama (기본: 환경변수 LLM_PROVIDER 또는 설정값)")
+    parser.add_argument("--model", help="모델 이름 (기본: 제공자별 기본 모델)")
     args = parser.parse_args()
 
-    result = answer(args.question, k=args.k)
+    provider, model = resolve(args.provider, args.model)
+    print(f"[LLM] {provider} / {model}\n")
+    result = answer(args.question, k=args.k, llm=get_llm(provider, model))
     print(result["answer"])
     print(f"\n(검색 1위 점수 {result['top_score']:.3f}, LLM 호출 {'함' if result['used_llm'] else '안 함'})")
     if result["invalid_citations"]:

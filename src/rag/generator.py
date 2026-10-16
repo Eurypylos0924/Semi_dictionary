@@ -7,27 +7,15 @@
   2) 프롬프트로 "초록에 없으면 모른다고 답하라"고 지시하고, 답변의 인용 번호가 실제 있는 논문인지 검사한다.
 """
 
-import os
 import re
 from typing import Callable
 
-from dotenv import load_dotenv
 from langchain_core.output_parsers import StrOutputParser
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
-from src.const.config import ANSWER_TOP_K, CHAT_MAX_TOKENS, CHAT_MODEL, MIN_RETRIEVAL_SCORE
+from src.const.config import ANSWER_TOP_K, MIN_RETRIEVAL_SCORE
+from src.rag.llm import get_llm
 from src.rag.prompt import ANSWER_PROMPT, NOT_FOUND
 from src.rag.retriever import search
-
-
-def get_llm():
-    load_dotenv(".env")
-    return ChatNVIDIA(
-        model=os.getenv("CHAT_MODEL", CHAT_MODEL),
-        api_key=os.getenv("nvidiaapi_key"),
-        temperature=0,  # 같은 질문에 같은 답이 나오도록 고정
-        max_tokens=CHAT_MAX_TOKENS,
-    )
 
 
 def format_context(papers: list[dict]) -> str:
