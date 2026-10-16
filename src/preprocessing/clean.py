@@ -20,6 +20,9 @@ REQUIRE = {
     "cmp_defect": r"cmp|chemical.mechanical|planariz|slurry|polishing",
     "wafer_defect": r"wafer|semiconductor|die\b|fab\b",
     "yield_process": r"semiconductor|wafer|fab\b|lithograph|etch|deposition|yield",
+    "xrd_scherrer": r"scherrer|crystallite size|fwhm|full width|line broadening",
+    "xrd_williamson_hall": r"williamson|crystallite size|strain|line broadening|peak profile",
+    "hfo2_leakage_mechanism": r"leakage|conduction|poole|tunnel|schottky|trap",
 }
 
 # 반도체 공정과 거리가 먼 소재·분야를 가리키는 단어 (필요하면 검토 후 추가/삭제)
