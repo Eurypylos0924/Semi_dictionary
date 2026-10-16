@@ -12,11 +12,11 @@ src/collector/*_collect.py → data/raw/*.jsonl         논문 제목·초록 �
 src/preprocessing/clean.py → data/processed/papers.jsonl  무관 논문 제거 (제거 목록은 removed.jsonl에 남김)
 src/vectorstore/build.py   → data/index/papers.faiss      "제목+초록" 1건 = 청크 1개로 임베딩 후 FAISS 저장
 src/rag/retriever.py       → 질문과 가까운 논문 출력      한국어 질문으로 영어 논문 검색 가능
-src/evaluation/            → 평가 질문 27개 + 검색 지표(Hit@K, Recall@K, MRR) 측정
+src/evaluation/            → 평가 질문 30개 + 검색 지표(Hit@K, Recall@K, MRR) 측정
 ```
 
 - 임베딩: NVIDIA `nemotron-3-embed-1b` (2048차원, 무료 API). 키는 `.env`의 `nvidiaapi_key`에 둔다.
-- 벡터 DB: 로컬 FAISS (`IndexFlatIP` + 정규화 벡터 = 코사인 유사도). 논문 206건 규모라 정확 검색으로 충분하다.
+- 벡터 DB: 로컬 FAISS (`IndexFlatIP` + 정규화 벡터 = 코사인 유사도). 논문 322건 규모라 정확 검색으로 충분하다.
 
 ## 수집 데이터
 
@@ -30,10 +30,12 @@ src/evaluation/            → 평가 질문 27개 + 검색 지표(Hit@K, Recall
 | `cmp_defect` | CMP 공정 결함 |
 | `wafer_defect` | 웨이퍼 맵 결함 패턴 |
 | `yield_process` | 공정 수율·근본 원인 분석 |
+| `xrd_scherrer`, `xrd_williamson_hall` | XRD 기본 개념: Scherrer 식, FWHM, 결정립 크기·변형률 분석 (평가에서 드러난 빈틈 보강) |
+| `hfo2_leakage_mechanism` | HfO2 누설 전도 메커니즘 (Poole-Frenkel 등, 빈틈 보강) |
 
 | 수집기 | 출처 | 상태 |
 | --- | --- | --- |
-| `src/collector/openalex_collect.py` | OpenAlex 공식 API (학술지 포함) | 사용 중 — 239건 수집 |
+| `src/collector/openalex_collect.py` | OpenAlex 공식 API (학술지 포함) | 사용 중 — 356건 수집 (정제 후 322건) |
 | `src/collector/arxiv_collect.py` | arXiv 공식 API | 이 네트워크 IP에서 429(rate limit)로 수집 실패, 네트워크가 바뀌면 재시도 |
 
 ## 디렉토리 구조
@@ -61,7 +63,7 @@ uv sync
 cp .env.example .env                                                  # nvidiaapi_key 값 채우기
 uv run python -m src.collector.openalex_collect --max-per-query 40            # 최초 수집
 uv run python -m src.collector.openalex_collect --max-per-query 40 --refresh  # 새 논문만 추가
-uv run python -m src.preprocessing.clean                                                # 정제 (239건 -> 206건)
+uv run python -m src.preprocessing.clean                                                # 정제 (356건 -> 322건)
 uv run python -m src.vectorstore.build                                                # 인덱스 구축 (--rebuild로 재구축)
 uv run python -m src.rag.retriever "CMP 공정에서 스크래치 결함이 생기는 메커니즘" -k 3
 uv run python -m src.evaluation.retrieval_eval --save                      # 검색 평가
@@ -88,25 +90,26 @@ uv run pytest                                                             # 테�
 
 | 구분 | 개수 | 설명 |
 | --- | ---: | --- |
-| 답이 있는 질문 | 22 | 근거 논문(`gold_doc_ids`)과 정답에 들어가야 할 핵심 내용(`expected_points`)을 함께 기록 |
-| 수집 빈틈 (`G`) | 2 | 도메인상 중요하지만 코퍼스에 없는 질문 (Scherrer 식, FWHM) |
+| 답이 있는 질문 | 27 | 근거 논문(`gold_doc_ids`, 1~3편)과 정답에 들어가야 할 핵심 내용(`expected_points`)을 함께 기록 |
 | 범위 밖 (`U`) | 3 | 코퍼스에 없어서 "찾지 못했다"고 답해야 하는 질문 |
 
-- 질문은 초록을 보고 초안을 작성했고(`reviewed` 전 단계), 근거 논문 ID는 코퍼스와 대조해 검증했다.
-- 코퍼스 초록에 `Scherrer`가 **0건**이다. 챗봇이 XRD 기본 용어(Scherrer 식, FWHM)를 못 다루므로 교재·리뷰 논문 수집이 필요하다.
+- 질문은 초록을 보고 초안을 작성했고(도메인 검수 전 단계), 근거 논문 ID는 코퍼스와 대조해 검증했다.
+- 처음 코퍼스(206건)에는 `Scherrer` 언급이 **0건**이라 XRD 기본 용어(Scherrer 식, FWHM) 질문을 다룰 수 없었다.
+  수집 주제를 추가해(`xrd_scherrer` 등) 322건으로 늘린 뒤 질문 Q23~Q27로 편입했다. Scherrer 언급은 0건 → 54건.
 
-### 기준선 결과 (임베딩만 사용, 22개 질문)
+### 기준선 결과 (임베딩만 사용)
 
-| Hit@1 | Hit@3 | Hit@5 | Recall@5 | MRR |
-| ---: | ---: | ---: | ---: | ---: |
-| 0.955 | 1.000 | 1.000 | 1.000 | 0.970 |
+| 코퍼스 | 질문 수 | Hit@1 | Hit@3 | Hit@5 | Recall@5 | MRR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 206건 | 22 | 0.955 | 1.000 | 1.000 | 1.000 | 0.970 |
+| 322건 (보강 후) | 27 | 0.889 | 0.963 | 1.000 | 0.957 | 0.929 |
 
-> **주의: 이 결과는 검색이 잘 된다는 증거로 보기 어렵다.** 질문을 각 논문의 초록을 보고 썼기 때문에 질문 표현이 논문 제목·초록과 거의 겹쳐서, 어떤 검색기든 높게 나오는 쉬운 평가다.
-> 검색 방식을 개선했을 때의 차이를 가려내려면, 논문을 보지 않고 실제 QA 엔지니어가 물을 법한 표현으로 쓴 질문(어휘가 겹치지 않거나 모호한 질문)이 필요하다. 상세 결과: `src/evaluation/results/`
+- 322건 결과에서 지표가 낮아진 이유는 코퍼스 확대(경쟁 논문 증가)와 근거 논문이 여러 편인 질문(Q24, Q26)이 추가돼 일부만 찾는 경우가 생겼기 때문이다.
+- **주의: 두 결과 모두 검색이 우수하다는 증거로 보기는 어렵다.** 질문을 각 논문의 초록을 보고 썼기 때문에 표현이 논문과 겹쳐 쉬운 평가다.
+  개선 효과를 가려내려면 논문을 보지 않고 현업 표현으로 쓴 질문(어휘가 겹치지 않거나 모호한 질문)이 필요하다. 상세 결과: `src/evaluation/results/`
 
 ## 다음 단계
 
 1. **더 어려운 평가 질문 추가**: 논문을 보지 않고 현업 표현으로 쓴 질문, 근거가 여러 논문에 걸친 질문 (도메인 지식으로 직접 검수)
-2. 코퍼스 보강: XRD 기본 개념(Scherrer, FWHM), HfO2 누설전류 메커니즘
-3. 답변 생성 단계: 검색한 논문을 근거로 한국어 답변 + 출처 표시, 근거 없으면 "찾지 못함"
-4. 하이브리드 검색(BM25 + 임베딩)·재정렬 적용 후 지표 비교, Streamlit 화면
+2. 답변 생성 단계: 검색한 논문을 근거로 한국어 답변 + 출처 표시, 근거 없으면 "찾지 못함"
+3. 하이브리드 검색(BM25 + 임베딩)·재정렬 적용 후 지표 비교, Streamlit 화면

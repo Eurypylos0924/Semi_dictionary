@@ -28,3 +28,11 @@ def test_removes_generic_manufacturing_review_from_yield_topic():
 def test_keeps_semiconductor_yield_paper():
     p = paper("Root cause analysis for wafer yield", "Semiconductor fab excursion detection.", ["yield_process"])
     assert check(p) is None
+
+
+def test_every_collector_topic_has_a_require_rule():
+    # REQUIRE에 없는 주제는 논문이 전부 걸러지므로, 수집 주제를 추가하면 규칙도 함께 추가해야 한다
+    from src.collector.openalex_collect import TOPICS
+    from src.preprocessing.clean import REQUIRE
+
+    assert set(TOPICS) <= set(REQUIRE)

@@ -55,6 +55,7 @@ def format_table(title: str, groups: dict[str, list[dict]]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="검색 품질 평가")
     parser.add_argument("--save", action="store_true", help="결과를 src/evaluation/results/ 에 markdown으로 저장")
+    parser.add_argument("--tag", default="", help="결과 파일 이름에 붙일 구분자 (예: 322docs)")
     args = parser.parse_args()
 
     scored = []
@@ -77,7 +78,8 @@ def main() -> None:
 
     if args.save:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        path = RESULTS_DIR / f"retrieval_baseline_{date.today().isoformat()}.md"
+        suffix = f"_{args.tag}" if args.tag else ""
+        path = RESULTS_DIR / f"retrieval_baseline_{date.today().isoformat()}{suffix}.md"
         path.write_text(f"# 검색 기준선 평가 ({date.today().isoformat()})\n\n임베딩만 사용(NVIDIA nemotron-3-embed-1b, FAISS), 상위 {MAX_K}개 기준.\n\n{text}\n", encoding="utf-8")
         print(f"\n저장: {path}")
 
