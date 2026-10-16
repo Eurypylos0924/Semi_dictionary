@@ -12,6 +12,7 @@ src/collector/*_collect.py → data/raw/*.jsonl         논문 제목·초록 �
 src/preprocessing/clean.py → data/processed/papers.jsonl  무관 논문 제거 (제거 목록은 removed.jsonl에 남김)
 src/vectorstore/build.py   → data/index/papers.faiss      "제목+초록" 1건 = 청크 1개로 임베딩 후 FAISS 저장
 src/rag/retriever.py       → 질문과 가까운 논문 출력      한국어 질문으로 영어 논문 검색 가능
+src/evaluation/            → 평가 질문 27개 + 검색 지표(Hit@K, Recall@K, MRR) 측정
 ```
 
 - 임베딩: NVIDIA `nemotron-3-embed-1b` (2048차원, 무료 API). 키는 `.env`의 `nvidiaapi_key`에 둔다.
@@ -46,6 +47,7 @@ semicon-rag
 │   ├── preprocessing/           # 무관 논문 제거
 │   ├── vectorstore/             # 임베딩, FAISS 인덱스 구축
 │   ├── rag/                     # 검색 (이후 답변 생성 단계 추가)
+│   ├── evaluation/              # 평가 질문 세트, 검색 지표 측정, 결과(results/)
 │   └── const/                   # 경로·모델 설정
 ├── tests/                       # collector · preprocessing · vectorstore 테스트
 ├── data/                        # raw → processed → index (git 제외)
@@ -62,6 +64,7 @@ uv run python -m src.collector.openalex_collect --max-per-query 40 --refresh  # 
 uv run python -m src.preprocessing.clean                                                # 정제 (239건 -> 206건)
 uv run python -m src.vectorstore.build                                                # 인덱스 구축 (--rebuild로 재구축)
 uv run python -m src.rag.retriever "CMP 공정에서 스크래치 결함이 생기는 메커니즘" -k 3
+uv run python -m src.evaluation.retrieval_eval --save                      # 검색 평가
 uv run pytest                                                             # 테스트
 ```
 
@@ -81,9 +84,29 @@ uv run pytest                                                             # 테�
 - "HfO2 박막에서 누설전류가 커지는 원인은?": 상위 3건이 증착 방법 논문이고, 누설전류 원인을 다룬 논문은 없었다.
   코퍼스에 HfO2 **누설전류 메커니즘** 논문이 부족한 것으로 보이며, 검색 모델보다 **수집 검색어의 문제**일 가능성이 크다.
 
+## 평가 질문 세트 (`src/evaluation/questions.jsonl`)
+
+| 구분 | 개수 | 설명 |
+| --- | ---: | --- |
+| 답이 있는 질문 | 22 | 근거 논문(`gold_doc_ids`)과 정답에 들어가야 할 핵심 내용(`expected_points`)을 함께 기록 |
+| 수집 빈틈 (`G`) | 2 | 도메인상 중요하지만 코퍼스에 없는 질문 (Scherrer 식, FWHM) |
+| 범위 밖 (`U`) | 3 | 코퍼스에 없어서 "찾지 못했다"고 답해야 하는 질문 |
+
+- 질문은 초록을 보고 초안을 작성했고(`reviewed` 전 단계), 근거 논문 ID는 코퍼스와 대조해 검증했다.
+- 코퍼스 초록에 `Scherrer`가 **0건**이다. 챗봇이 XRD 기본 용어(Scherrer 식, FWHM)를 못 다루므로 교재·리뷰 논문 수집이 필요하다.
+
+### 기준선 결과 (임베딩만 사용, 22개 질문)
+
+| Hit@1 | Hit@3 | Hit@5 | Recall@5 | MRR |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.955 | 1.000 | 1.000 | 1.000 | 0.970 |
+
+> **주의: 이 결과는 검색이 잘 된다는 증거로 보기 어렵다.** 질문을 각 논문의 초록을 보고 썼기 때문에 질문 표현이 논문 제목·초록과 거의 겹쳐서, 어떤 검색기든 높게 나오는 쉬운 평가다.
+> 검색 방식을 개선했을 때의 차이를 가려내려면, 논문을 보지 않고 실제 QA 엔지니어가 물을 법한 표현으로 쓴 질문(어휘가 겹치지 않거나 모호한 질문)이 필요하다. 상세 결과: `src/evaluation/results/`
+
 ## 다음 단계
 
-1. 평가 질문 세트(질문 + 근거 논문) 15~20개를 도메인 지식으로 직접 작성하고 Hit@K, MRR 측정
-2. 부족한 주제(HfO2 누설전류 메커니즘 등)의 수집 검색어 보강
-3. 하이브리드 검색(BM25 + 임베딩)과 재정렬 적용 후 지표 비교
-4. 검색 결과를 근거로 답변하는 LLM 단계(출처 표시 포함)
+1. **더 어려운 평가 질문 추가**: 논문을 보지 않고 현업 표현으로 쓴 질문, 근거가 여러 논문에 걸친 질문 (도메인 지식으로 직접 검수)
+2. 코퍼스 보강: XRD 기본 개념(Scherrer, FWHM), HfO2 누설전류 메커니즘
+3. 답변 생성 단계: 검색한 논문을 근거로 한국어 답변 + 출처 표시, 근거 없으면 "찾지 못함"
+4. 하이브리드 검색(BM25 + 임베딩)·재정렬 적용 후 지표 비교, Streamlit 화면
