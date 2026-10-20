@@ -14,6 +14,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from src.const.config import MIN_RETRIEVAL_SCORE
 from src.rag.retriever import search
 
 QUESTIONS_PATH = Path("src/evaluation/questions.jsonl")
@@ -22,9 +23,18 @@ KS = (1, 3, 5)
 MAX_K = 10
 
 
-def load_questions() -> list[dict]:
-    with QUESTIONS_PATH.open(encoding="utf-8") as f:
+def load_questions(path: Path = QUESTIONS_PATH) -> list[dict]:
+    with path.open(encoding="utf-8") as f:
         return [json.loads(line) for line in f]
+
+
+def gate_report(rows: list[dict]) -> list[str]:
+    """답이 없는 질문의 검색 1위 점수와, 점수 게이트(MIN_RETRIEVAL_SCORE)가 어떻게 처리하는지 보여준다."""
+    lines = ["| id | 종류 | 1위 점수 | 게이트 | 질문 |", "| --- | --- | ---: | --- | --- |"]
+    for r in rows:
+        blocked = r["top_score"] < MIN_RETRIEVAL_SCORE
+        lines.append(f"| {r['id']} | {r['unanswerable_kind']} | {r['top_score']:.3f} | {'차단(근거 없음 응답)' if blocked else '통과(LLM이 거절해야 함)'} | {r['question']} |")
+    return lines
 
 
 def score_question(question: dict, ranked_ids: list[str]) -> dict:
@@ -54,25 +64,36 @@ def format_table(title: str, groups: dict[str, list[dict]]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="검색 품질 평가")
+    parser.add_argument("--questions", type=Path, default=QUESTIONS_PATH, help="평가 질문 파일(jsonl)")
     parser.add_argument("--save", action="store_true", help="결과를 src/evaluation/results/ 에 markdown으로 저장")
     parser.add_argument("--tag", default="", help="결과 파일 이름에 붙일 구분자 (예: 322docs)")
     args = parser.parse_args()
 
-    scored = []
-    for q in (q for q in load_questions() if q["answerable"]):
-        ranked = [p["doc_id"] for p in search(q["question"], MAX_K)]
-        scored.append({**q, **score_question(q, ranked)})
+    questions = load_questions(args.questions)
+    scored, unanswerable = [], []
+    for q in questions:
+        results = search(q["question"], MAX_K)
+        if q["answerable"]:
+            scored.append({**q, **score_question(q, [p["doc_id"] for p in results]), "top_score": results[0]["score"]})
+        else:
+            unanswerable.append({**q, "top_score": results[0]["score"]})
 
-    by_topic: dict[str, list[dict]] = defaultdict(list)
+    group_key = "topic" if len({r["topic"] for r in scored}) > 1 else "type"
+    groups_by: dict[str, list[dict]] = defaultdict(list)
     for r in scored:
-        by_topic[r["topic"]].append(r)
-    groups = {"전체": scored, **dict(sorted(by_topic.items()))}
+        groups_by[r[group_key]].append(r)
+    groups = {"전체": scored, **dict(sorted(groups_by.items()))}
 
     misses = [r for r in scored if r["first_rank"] is None or r["first_rank"] > 5]
+    blocked_wrongly = [r for r in scored if r["top_score"] < MIN_RETRIEVAL_SCORE]
     report = [format_table("검색 지표 (근거 논문이 있는 질문)", groups), "", f"### 상위 5위 밖이거나 못 찾은 질문 ({len(misses)}개)", ""]
     for r in misses:
         rank = r["first_rank"] or f">{MAX_K}"
-        report.append(f"- {r['id']} [{r['topic']}] 첫 근거 순위 {rank}: {r['question']}")
+        report.append(f"- {r['id']} [{r[group_key]}] 첫 근거 순위 {rank} (1위 점수 {r['top_score']:.3f}): {r['question']}")
+    report += ["", f"### 점수 게이트(0.30)에 잘못 막히는 '답 있는 질문' ({len(blocked_wrongly)}개)", ""]
+    report += [f"- {r['id']} 1위 점수 {r['top_score']:.3f}: {r['question']}" for r in blocked_wrongly] or ["- 없음"]
+    if unanswerable:
+        report += ["", "### 답이 없는 질문의 검색 1위 점수와 게이트 처리", ""] + gate_report(unanswerable)
     text = "\n".join(report)
     print(text)
 
@@ -80,7 +101,8 @@ def main() -> None:
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         suffix = f"_{args.tag}" if args.tag else ""
         path = RESULTS_DIR / f"retrieval_baseline_{date.today().isoformat()}{suffix}.md"
-        path.write_text(f"# 검색 기준선 평가 ({date.today().isoformat()})\n\n임베딩만 사용(NVIDIA nemotron-3-embed-1b, FAISS), 상위 {MAX_K}개 기준.\n\n{text}\n", encoding="utf-8")
+        header = f"# 검색 기준선 평가 ({date.today().isoformat()})\n\n질문 파일: `{args.questions}`. 임베딩만 사용(NVIDIA nemotron-3-embed-1b, FAISS), 상위 {MAX_K}개 기준.\n\n"
+        path.write_text(header + text + "\n", encoding="utf-8")
         print(f"\n저장: {path}")
 
 

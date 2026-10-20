@@ -46,3 +46,38 @@ def test_gold_doc_ids_exist_in_corpus():
     corpus = {json.loads(line)["doc_id"] for line in PROCESSED.open(encoding="utf-8")}
     missing = [(q["id"], g) for q in load_questions() for g in q["gold_doc_ids"] if g not in corpus]
     assert not missing
+
+
+FIELD_PATH = Path("src/evaluation/questions_field.jsonl")
+
+
+def test_field_question_file_schema():
+    questions = load_questions(FIELD_PATH)
+    assert len({q["id"] for q in questions}) == len(questions)
+    for q in questions:
+        assert q["question"].strip()
+        if q["answerable"]:
+            assert q["gold_doc_ids"] and q["expected_points"]
+        else:
+            assert q["gold_doc_ids"] == [] and q["note"]
+            assert q["unanswerable_kind"] in {"coverage_gap", "out_of_scope"}
+
+
+@pytest.mark.skipif(not PROCESSED.exists(), reason="data/processed 는 git에 없으므로 로컬에 있을 때만 검사")
+def test_field_gold_doc_ids_exist_in_corpus():
+    corpus = {json.loads(line)["doc_id"] for line in PROCESSED.open(encoding="utf-8")}
+    missing = [(q["id"], g) for q in load_questions(FIELD_PATH) for g in q["gold_doc_ids"] if g not in corpus]
+    assert not missing
+
+
+def test_gate_report_marks_blocked_and_passed_questions():
+    from src.const.config import MIN_RETRIEVAL_SCORE
+    from src.evaluation.retrieval_eval import gate_report
+
+    rows = [
+        {"id": "A", "unanswerable_kind": "out_of_scope", "top_score": MIN_RETRIEVAL_SCORE - 0.1, "question": "q1"},
+        {"id": "B", "unanswerable_kind": "coverage_gap", "top_score": MIN_RETRIEVAL_SCORE + 0.1, "question": "q2"},
+    ]
+    table = "\n".join(gate_report(rows))
+    assert "| A | out_of_scope | " in table and "차단" in table.split("| B |")[0]
+    assert "통과" in table.split("| B |")[1]
