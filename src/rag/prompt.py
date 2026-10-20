@@ -20,6 +20,6 @@ SYSTEM_PROMPT = f"""당신은 반도체·디스플레이 박막 공정(증착, �
 ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
         ("system", SYSTEM_PROMPT),
-        ("human", "[참고 논문]\n{context}\n\n[질문]\n{question}"),
+        ("human", "[참고 논문]\n{context}\n\n[질문]\n{question}{hint}"),
     ]
 )
