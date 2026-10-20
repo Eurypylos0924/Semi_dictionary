@@ -81,3 +81,22 @@ def test_gate_report_marks_blocked_and_passed_questions():
     table = "\n".join(gate_report(rows))
     assert "| A | out_of_scope | " in table and "차단" in table.split("| B |")[0]
     assert "통과" in table.split("| B |")[1]
+
+
+def test_gate_signal_helpers():
+    import numpy as np
+
+    from src.evaluation.gate_signals import auc, best_threshold, compute_signals, rates
+
+    assert auc([0.9, 0.8], [0.2, 0.1]) == 1.0
+    assert auc([0.1], [0.9]) == 0.0
+    assert auc([0.5], [0.5]) == 0.5  # 동점은 절반으로 계산
+
+    t = best_threshold([0.6, 0.5], [0.2, 0.3])
+    assert 0.3 < t < 0.5  # 두 집단 사이에서 완전히 갈라야 함
+    assert rates(t, [0.6, 0.5], [0.2, 0.3]) == (0.0, 0.0)
+    assert rates(0.55, [0.6, 0.5], [0.2, 0.3]) == (0.5, 0.0)  # 답 있는 질문 중 0.5는 거절됨
+
+    s = compute_signals(np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.1, 0.0]))
+    assert round(s["1위-2위 차이"], 3) == 0.1 and round(s["1위-5위 차이"], 3) == 0.4
+    assert round(s["상위5 평균"], 3) == 0.7
