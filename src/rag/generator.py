@@ -15,7 +15,7 @@ from langchain_core.output_parsers import StrOutputParser
 from src.const.config import ANSWER_TOP_K, MIN_RETRIEVAL_SCORE
 from src.rag.llm import get_llm
 from src.rag.prompt import ANSWER_PROMPT, NOT_FOUND
-from src.rag.retriever import search
+from src.rag.rewrite import search_with_mode
 
 
 def format_context(papers: list[dict]) -> str:
@@ -36,7 +36,7 @@ def answer(
     *,
     k: int = ANSWER_TOP_K,
     min_score: float = MIN_RETRIEVAL_SCORE,
-    search_fn: Callable[[str, int], list[dict]] = search,
+    search_fn: Callable[[str, int], list[dict]] = search_with_mode,
     llm=None,
 ) -> dict:
     papers = search_fn(question, k)

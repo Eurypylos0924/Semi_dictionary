@@ -7,9 +7,31 @@ import argparse
 import json
 
 import faiss
+import numpy as np
 
 from src.const.config import DOCS_PATH, FAISS_PATH
 from src.vectorstore.embedder import get_embeddings, normalize
+
+
+def max_fuse(scores: np.ndarray, ids: np.ndarray, n_docs: int) -> np.ndarray:
+    """검색어별 (점수, 문서 번호) 결과를 문서별 최댓값 점수 하나로 합친다. 점수는 코사인 유사도 그대로라 게이트에 쓸 수 있다."""
+    best = np.full(n_docs, -np.inf, dtype="float32")
+    for row_scores, row_ids in zip(scores, ids):
+        best[row_ids] = np.maximum(best[row_ids], row_scores)
+    return best
+
+
+def search_queries(queries: list[str], k: int = 5) -> list[dict]:
+    """검색어 여러 개로 검색해 문서별 최고 점수로 순위를 매긴다 (검색어가 하나면 search와 같은 결과)."""
+    index = faiss.read_index(str(FAISS_PATH))
+    with DOCS_PATH.open(encoding="utf-8") as f:
+        papers = [json.loads(line) for line in f]
+    embeddings = get_embeddings()
+    vectors = normalize([embeddings.embed_query(q) for q in queries])
+    scores, ids = index.search(vectors, index.ntotal)
+    best = max_fuse(scores, ids, index.ntotal)
+    top = np.argsort(-best)[:k]
+    return [{**papers[i], "score": float(best[i])} for i in top]
 
 
 def search(query: str, k: int = 5) -> list[dict]:
