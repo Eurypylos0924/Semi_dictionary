@@ -16,13 +16,17 @@ def main() -> None:
     parser.add_argument("-k", type=int, default=5, help="근거로 검토할 논문 수")
     parser.add_argument("--provider", help="gemini | nvidia | ollama (기본: 환경변수 LLM_PROVIDER 또는 설정값)")
     parser.add_argument("--model", help="모델 이름 (기본: 제공자별 기본 모델)")
+    parser.add_argument("--gate-mode", choices=["score", "judge"], help="근거 없음 판단 방식 (기본: 환경변수 GATE_MODE 또는 score)")
     parser.add_argument("--query-mode", choices=["original", "rewrite", "max"], help="검색 방식 (기본: 환경변수 QUERY_MODE 또는 original)")
     args = parser.parse_args()
 
     provider, model = resolve(args.provider, args.model)
     print(f"[LLM] {provider} / {model}\n")
     search_fn = (lambda q, k: search_with_mode(q, k, mode=args.query_mode)) if args.query_mode else search_with_mode
-    result = answer(args.question, k=args.k, llm=get_llm(provider, model), search_fn=search_fn)
+    result = answer(args.question, k=args.k, llm=get_llm(provider, model), search_fn=search_fn, gate_mode=args.gate_mode)
+    if result["verdict"]:
+        print(f"[근거 판정] {result['verdict']}: {result['judge_reason']}
+")
     print(result["answer"])
     print(f"\n(검색 1위 점수 {result['top_score']:.3f}, LLM 호출 {'함' if result['used_llm'] else '안 함'})")
     if result["invalid_citations"]:

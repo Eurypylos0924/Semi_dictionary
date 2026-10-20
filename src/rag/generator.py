@@ -12,10 +12,15 @@ from typing import Callable
 
 from langchain_core.output_parsers import StrOutputParser
 
+import os
+
 from src.const.config import ANSWER_TOP_K, MIN_RETRIEVAL_SCORE
+from src.rag.judge import DEFAULT_GATE_MODE, GATE_MODES, HARD_FLOOR, Judgement, judge
 from src.rag.llm import get_llm
 from src.rag.prompt import ANSWER_PROMPT, NOT_FOUND
 from src.rag.rewrite import search_with_mode
+
+PARTIAL_HINT = "\n\n[검토 메모]\n참고 논문으로는 질문의 일부만 답할 수 있다고 판정됐습니다. 논문에서 확인되는 부분만 답하고, 확인되지 않는 부분은 '논문에서 확인되지 않음'이라고 밝히세요."
 
 
 def format_context(papers: list[dict]) -> str:
@@ -38,25 +43,52 @@ def answer(
     min_score: float = MIN_RETRIEVAL_SCORE,
     search_fn: Callable[[str, int], list[dict]] = search_with_mode,
     llm=None,
+    gate_mode: str | None = None,
+    judge_fn: Callable[..., Judgement | None] = judge,
+    use_judge_selection: bool = False,
 ) -> dict:
+    """gate_mode: 'score'(검색 1위 점수가 min_score 미만이면 거절) | 'judge'(점수는 하한선, 그 위는 LLM이 근거 적합성 판정)."""
+    gate_mode = (gate_mode or os.getenv("GATE_MODE") or DEFAULT_GATE_MODE).lower()
+    if gate_mode not in GATE_MODES:
+        raise ValueError(f"알 수 없는 게이트 방식 '{gate_mode}'. 선택지: {', '.join(GATE_MODES)}")
+
     papers = search_fn(question, k)
     top_score = papers[0]["score"] if papers else 0.0
+    base = {"retrieved": papers, "top_score": top_score, "gate_mode": gate_mode, "verdict": None, "judge_reason": ""}
 
-    if not papers or top_score < min_score:
-        return {"answer": NOT_FOUND, "sources": [], "retrieved": papers, "top_score": top_score,
-                "used_llm": False, "invalid_citations": [], "uncited": False}
+    def refuse(reason: str = "", **extra) -> dict:
+        text = f"{NOT_FOUND} {reason}".strip()
+        return {**base, "answer": text, "sources": [], "used_llm": False, "invalid_citations": [], "uncited": False, **extra}
+
+    context_papers, hint = papers, ""
+    if gate_mode == "score":
+        if not papers or top_score < min_score:
+            return refuse()
+    else:
+        if not papers or top_score < HARD_FLOOR:
+            return refuse()
+        judgement = judge_fn(question, papers, llm=llm)
+        if judgement is None:  # 판정 형식 오류 -> 점수 게이트로 대체
+            if top_score < min_score:
+                return refuse(verdict="judge_failed")
+        else:
+            base["verdict"], base["judge_reason"] = judgement.verdict, judgement.reason
+            if judgement.verdict == "none":
+                return refuse(judgement.reason)
+            if use_judge_selection:  # 판정이 고른 논문만 근거로 쓴다 (기본은 끔: 측정에서 정답 논문의 약 절반을 버림)
+                context_papers = [papers[n - 1] for n in judgement.relevant]
+            hint = PARTIAL_HINT if judgement.verdict == "partial" else ""
 
     chain = ANSWER_PROMPT | (llm or get_llm()) | StrOutputParser()
-    text = chain.invoke({"context": format_context(papers), "question": question}).strip()
+    text = chain.invoke({"context": format_context(context_papers), "question": question, "hint": hint}).strip()
 
-    valid, invalid = extract_citations(text, len(papers))
+    valid, invalid = extract_citations(text, len(context_papers))
     not_found = text.startswith(NOT_FOUND)
     return {
+        **base,
         "answer": text,
-        "sources": [papers[n - 1] for n in valid],      # 답변이 실제로 인용한 논문만 출처로 보여준다
-        "retrieved": papers,
-        "top_score": top_score,
+        "sources": [context_papers[n - 1] for n in valid],  # 답변이 실제로 인용한 논문만 출처로 보여준다
         "used_llm": True,
-        "invalid_citations": invalid,                   # 없는 번호를 인용했다면 환각 신호
-        "uncited": not valid and not not_found,         # 근거를 말하면서 인용이 하나도 없으면 신뢰하기 어려움
+        "invalid_citations": invalid,                       # 없는 번호를 인용했다면 환각 신호
+        "uncited": not valid and not not_found,             # 근거를 말하면서 인용이 하나도 없으면 신뢰하기 어려움
     }
