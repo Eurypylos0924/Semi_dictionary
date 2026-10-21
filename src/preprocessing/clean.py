@@ -4,9 +4,14 @@
 논문마다 "자기 주제에 꼭 있어야 할 단어(REQUIRE)"를 확인하고, 공통 제외 단어(EXCLUDE)가 있으면 뺀다.
 뺀 논문은 이유와 함께 data/processed/removed.jsonl 에 남겨서 사람이 검토할 수 있게 한다.
 
+수식이 빠진 초록도 뺀다. OpenAlex 초록에서는 수식·수치(LaTeX)가 통째로 사라져 "pulse times of must be applied",
+"from room temperature to ."처럼 값이 빠진 문장이 남고, LLM이 그 빈자리를 지어내 환각을 만든 사례가 있었다(docs/evaluation.md).
+Crossref 등 다른 출처로 복구하는 것은 시도해 보았으나 해당 논문들의 초록이 아예 없거나 같은 부분이 비어 있어 현실적이지 않았다.
+
 실행: uv run python -m src.preprocessing.clean
 """
 
+import argparse
 import json
 import re
 
@@ -31,6 +36,25 @@ EXCLUDE = r"phthalocyanine|elastomer|polyimide|organic (thin.film )?transistor|b
 # 제목에 있을 때만 제외하는 단어: 초록에는 CMP 패드나 XRD 시료처럼 정상 논문에도 '고분자'가 나올 수 있다
 EXCLUDE_TITLE = r"polymer|poly\(|copolymer|nanocomposite|epoxy|p3ht|pcbm"
 
+# 수식·수치가 빠진 초록의 흔적: 값이 있어야 할 자리가 비어 문장이 어색해진 형태. 코퍼스 322건을 직접 훑어 만들었다.
+# 정상 문법을 오탐하지 않도록 'than for'(비교), 'up to and'(범위), 'high- and low-'(접두어 나열)는 일부러 걸리지 않게 했다.
+# 한계: 눈에 보이는 빈자리만 잡는다. 문장이 멀쩡하게 이어지는 누락은 못 찾는다.
+MATH_LOSS_PATTERNS = {
+    "값 누락(전치사·비교어 뒤가 비어 있음)": r"(?i:\b(?:of|to|from|by|at|than|between|above|below|about|around|near|over|under|until)\s+[,.;)])",
+    "값 누락(of 뒤 and, from/to/at/of 뒤 for)": r"(?i:\bof\s+and\b|\b(?:from|to|at|of)\s+for\b)",
+    "수식 누락(빈 괄호)": r"\(\s*\)|\[\s*\]",
+    "값 누락(sub-, high- 같은 접두어 뒤)": r"(?i:\b(?:sub|high|low|ultra|near|multi|wide|narrow)-\s+(?!and\b|or\b|to\b)[a-z])",
+    "주어 누락(전치사 뒤 조동사)": r"(?i:\b(?:of|from|by|at|than)\s+(?:must|should|can|will|is|are|was|were|has|have)\b)",
+    "값 누락(단위만 남음)": r"(?i:\b(?:of|at|to|from|than|above|below|about|around|under|over|between))\s+(?:nm|μm|µm|eV|MV|kV|°C|Å|fF|pF|GHz|A/cm)\b",
+    "수식 누락(쉼표·and 뒤 닫는 괄호)": r"(?i:(?:,|\band)\s*\))",
+    "글자 깨짐(마침표 뒤 소문자)": r"\s\.\s+[a-z]",
+}
+
+
+def math_loss_signals(summary: str) -> list[str]:
+    """초록에서 수식·수치 누락으로 보이는 신호의 이름 목록. 없으면 빈 목록."""
+    return [name for name, pattern in MATH_LOSS_PATTERNS.items() if re.search(pattern, summary)]
+
 
 def load_raw() -> list[dict]:
     papers = []
@@ -44,7 +68,7 @@ def load_raw() -> list[dict]:
     return papers
 
 
-def check(paper: dict) -> str | None:
+def check(paper: dict, drop_math_loss: bool = True) -> str | None:
     """남기면 None, 빼야 하면 이유를 돌려준다."""
     text = f"{paper['title']} {paper['summary']}".lower()
     if m := re.search(EXCLUDE, text):
@@ -53,10 +77,16 @@ def check(paper: dict) -> str | None:
         return "exclude_title:" + m.group(0)
     if not any(re.search(REQUIRE[t], text) for t in paper["topics"] if t in REQUIRE):
         return "require:" + ",".join(paper["topics"])
+    if drop_math_loss and (signals := math_loss_signals(paper["summary"])):
+        return "math_loss:" + ",".join(signals)
     return None
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="수집한 논문 정제")
+    parser.add_argument("--keep-math-loss", action="store_true", help="수식이 빠진 초록도 남긴다(기본은 제거)")
+    args = parser.parse_args()
+
     kept, removed, seen_titles = [], [], set()
     for paper in load_raw():
         title_key = re.sub(r"\W+", "", paper["title"].lower())
@@ -64,7 +94,7 @@ def main() -> None:
             removed.append({**paper, "removed_reason": "duplicate_title"})
             continue
         seen_titles.add(title_key)
-        reason = check(paper)
+        reason = check(paper, drop_math_loss=not args.keep_math_loss)
         (removed if reason else kept).append({**paper, "removed_reason": reason} if reason else paper)
 
     PROCESSED_PATH.parent.mkdir(parents=True, exist_ok=True)
