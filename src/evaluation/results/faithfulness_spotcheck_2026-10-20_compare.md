@@ -8,7 +8,7 @@
 - 인용한 초록:
   - [5] Process optimization and consumable development for Chemical Mechanical Planarization (CMP) processes: Chemical Mechanical Planarization (CMP) is one of the most critical processing steps that enables fabrication of multilevel interconnects. The success of CMP process is limited by the implementation of an optimized process and reduction of process generated defects along with post CMP surface characteristics such as dishing and erosion. This thesis…
 - **채점 판정: supported** (뒷받침 논문 [5]) 참고 논문[5] 초록에 표면 기능화된 폴리머 입자가 낮은 마찰 계수와 기존 대비 훨씬 적은 표면 스크래치를 유도한다고 명시되어 있다.
-- 사람 확인: [ ] 판정이 맞다  [ ] 틀리다
+- 사람 확인: [ o ] 판정이 맞다  [ ] 틀리다
 
 ### max_judge / F03
 - 질문: ALD 사이클 수는 같은데 두께가 기대보다 얇게 나와. 뭘 의심해야 해?
@@ -16,7 +16,7 @@
 - 인용한 초록:
   - (인용 없음)
 - **채점 판정: unsupported** (뒷받침 논문 []) No citation was provided for this claim, and none of the referenced abstracts mention gas flow issues, precursor supply efficiency, or specific process condition mismatches.
-- 사람 확인: [ ] 판정이 맞다  [ ] 틀리다
+- 사람 확인: [ o ] 판정이 맞다  [ ] 틀리다
 
 ### max_judge / Q26
 - 질문: HfO2 게이트 절연막의 누설전류는 전계 영역별로 어떤 전도 메커니즘이 지배하는가?
@@ -24,7 +24,7 @@
 - 인용한 초록:
   - [5] Tunneling-assisted Poole-Frenkel conduction mechanism in HfO2 thin films: Tunneling-assisted Poole-Frenkel (TAPF) mechanism, which represents electron tunneling from a metal electrode to traps in a nearby insulator layer followed by detrapping of the electrons from the traps by virtue of a lowered potential well due to an applied electric field, is suggested in this study to precisely describe the electrical conduction b…
 - **채점 판정: supported** (뒷받침 논문 [5]) Reference [5] proposes the TAPF mechanism for Pt/HfO2/Si, noting similar field dependence to PF but activation energy tied to the Schottky barrier height.
-- 사람 확인: [ ] 판정이 맞다  [ ] 틀리다
+- 사람 확인: [ o ] 판정이 맞다  [ ] 틀리다
 
 ### baseline / Q08
 - 질문: GaAs 위에 ALD로 만든 초박막 Al2O3의 누설전류와 항복전계는 어느 수준인가?
@@ -32,7 +32,7 @@
 - 인용한 초록:
   - [1] Leakage current and breakdown electric-field studies on ultrathin atomic-layer-deposited Al2O3 on GaAs: Atomic-layer deposition (ALD) provides a unique opportunity to integrate high-quality gate dielectrics on III-V compound semiconductors. We report detailed leakage current and breakdown electric-field characteristics of ultrathin Al2O3 dielectrics on GaAs grown by ALD. The leakage current in ultrathin Al2O3 on GaAs is comparable to or even lower th…
 - **채점 판정: supported** (뒷받침 논문 [1]) Reference [1] observes a significant enhancement of breakdown electric field up to 30 MV/cm as the film thickness approaches 1 nm.
-- 사람 확인: [ ] 판정이 맞다  [ ] 틀리다
+- 사람 확인: [ o ] 판정이 맞다  [ ] 틀리다
 
 ### max_judge / F03
 - 질문: ALD 사이클 수는 같은데 두께가 기대보다 얇게 나와. 뭘 의심해야 해?
@@ -40,7 +40,7 @@
 - 인용한 초록:
   - [1] Scaling to Sub-1 nm Equivalent Oxide Thickness with Hafnium Oxide Deposited by Atomic Layer Deposition: The implementation of gate dielectrics in sub- devices requires optimization of nanometer-thin layers, deposited, e.g., by atomic layer deposition (ALD). In this work, we optimize ALD conditions such as precursor pulse time and deposition temperature for layers with physical thicknesses below . Additionally, we investigate intermediate treatments i…
 - **채점 판정: supported** (뒷받침 논문 [1]) Reference [1] indicates that specific pulse times must be applied to achieve saturation in GPC and Cl content.
-- 사람 확인: [ ] 판정이 맞다  [ ] 틀리다
+- 사람 확인: [ o ] 판정이 맞다  [ ] 틀리다
 
 ### baseline / Q16
 - 질문: CMP 후 세정(post-CMP cleaning)이 중요한 이유는 무엇인가?
