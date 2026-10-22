@@ -4,7 +4,7 @@
 논문마다 "자기 주제에 꼭 있어야 할 단어(REQUIRE)"를 확인하고, 공통 제외 단어(EXCLUDE)가 있으면 뺀다.
 뺀 논문은 이유와 함께 data/processed/removed.jsonl 에 남겨서 사람이 검토할 수 있게 한다.
 
-수식이 빠진 초록도 뺀다. OpenAlex 초록에서는 수식·수치(LaTeX)가 통째로 사라져 "pulse times of must be applied",
+수식이 빠진 초록은 빼되, 사람이 검토해 남기기로 한 논문(KEEP_WITH_FLAG)은 math_loss 표시를 붙여 남긴다. OpenAlex 초록에서는 수식·수치(LaTeX)가 통째로 사라져 "pulse times of must be applied",
 "from room temperature to ."처럼 값이 빠진 문장이 남고, LLM이 그 빈자리를 지어내 환각을 만든 사례가 있었다(docs/evaluation.md).
 Crossref 등 다른 출처로 복구하는 것은 시도해 보았으나 해당 논문들의 초록이 아예 없거나 같은 부분이 비어 있어 현실적이지 않았다.
 
@@ -68,6 +68,21 @@ def load_raw() -> list[dict]:
     return papers
 
 
+# 수식이 빠졌지만 사람이 검토해 "남기되 표시"하기로 한 논문 (doc_id -> 이유). 남긴 논문에는 math_loss 필드(걸린 신호 목록)가 붙는다.
+KEEP_WITH_FLAG = {
+    "W2076838934": "ALD 포화 펄스·표면 수산화와 누설전류의 관계 등 정성적 내용이 유용함 (2026-10-21 사용자 결정). 펄스 시간 등 수치는 초록에 없으므로 답변에서 만들면 안 됨",
+}
+
+
+def apply_math_loss_policy(paper: dict, reason: str | None, keep_all: bool = False) -> tuple[dict, str | None]:
+    """수식 누락으로 제거될 논문 중 남기기로 한 것(KEEP_WITH_FLAG 또는 keep_all)은 math_loss 표시를 붙여 남긴다."""
+    if not (reason and reason.startswith("math_loss:")):
+        return paper, reason
+    if keep_all or paper["doc_id"] in KEEP_WITH_FLAG:
+        return {**paper, "math_loss": math_loss_signals(paper["summary"])}, None
+    return paper, reason
+
+
 def check(paper: dict, drop_math_loss: bool = True) -> str | None:
     """남기면 None, 빼야 하면 이유를 돌려준다."""
     text = f"{paper['title']} {paper['summary']}".lower()
@@ -84,7 +99,7 @@ def check(paper: dict, drop_math_loss: bool = True) -> str | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="수집한 논문 정제")
-    parser.add_argument("--keep-math-loss", action="store_true", help="수식이 빠진 초록도 남긴다(기본은 제거)")
+    parser.add_argument("--keep-math-loss", action="store_true", help="수식이 빠진 초록을 모두 남기고 math_loss 표시를 붙인다(기본은 KEEP_WITH_FLAG의 논문만 남기고 나머지는 제거)")
     args = parser.parse_args()
 
     kept, removed, seen_titles = [], [], set()
@@ -94,7 +109,7 @@ def main() -> None:
             removed.append({**paper, "removed_reason": "duplicate_title"})
             continue
         seen_titles.add(title_key)
-        reason = check(paper, drop_math_loss=not args.keep_math_loss)
+        paper, reason = apply_math_loss_policy(paper, check(paper), keep_all=args.keep_math_loss)
         (removed if reason else kept).append({**paper, "removed_reason": reason} if reason else paper)
 
     PROCESSED_PATH.parent.mkdir(parents=True, exist_ok=True)

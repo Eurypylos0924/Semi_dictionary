@@ -1,6 +1,6 @@
 import pytest
 
-from src.preprocessing.clean import check, math_loss_signals
+from src.preprocessing.clean import KEEP_WITH_FLAG, apply_math_loss_policy, check, math_loss_signals
 
 
 def paper(title: str, summary: str, topics: list[str]) -> dict:
@@ -81,4 +81,26 @@ def test_check_drops_math_loss_papers_unless_told_to_keep_them():
     damaged = paper("Scaling to sub-1 nm EOT", "Pulse times of must be applied to achieve saturation in hafnium oxide ALD.", ["hfo2_ald"])
     assert check(damaged).startswith("math_loss:")
     assert check(damaged, drop_math_loss=False) is None
+
+
+def test_math_loss_policy_keeps_reviewed_papers_with_flag_and_drops_the_rest():
+    damaged = "Pulse times of must be applied to achieve saturation in hafnium oxide ALD."
+    kept_id = next(iter(KEEP_WITH_FLAG))
+    reviewed = {**paper("T", damaged, ["hfo2_ald"]), "doc_id": kept_id}
+    other = {**paper("T2", damaged, ["hfo2_ald"]), "doc_id": "W-other"}
+
+    kept, reason = apply_math_loss_policy(reviewed, check(reviewed))
+    assert reason is None and kept["math_loss"]  # 남기되 걸린 신호가 표시로 붙음
+
+    dropped, reason = apply_math_loss_policy(other, check(other))
+    assert reason.startswith("math_loss:") and "math_loss" not in dropped
+
+    forced, reason = apply_math_loss_policy(other, check(other), keep_all=True)
+    assert reason is None and forced["math_loss"]
+
+
+def test_math_loss_policy_leaves_other_removal_reasons_and_clean_papers_alone():
+    clean_paper = {**paper("T", "Hafnium oxide atomic layer deposition.", ["hfo2_ald"]), "doc_id": "W1"}
+    assert apply_math_loss_policy(clean_paper, None) == (clean_paper, None)
+    assert apply_math_loss_policy(clean_paper, "exclude:polymer", keep_all=True) == (clean_paper, "exclude:polymer")
 
