@@ -45,7 +45,8 @@ SETS = {"field": Path("src/evaluation/questions_field.jsonl"), "original": Path(
 ANSWER_CACHE = Path("data/cache/faithfulness_answers.jsonl")
 GRADE_CACHE = Path("data/cache/faithfulness_grades.jsonl")
 # 채점은 답변을 만든 모델(Gemini flash-lite)과 다른 제공자로 한다(자기 평가 편향을 줄이고 Gemini 무료 등급의 일일 한도를 피함)
-DEFAULT_GRADER = ("nvidia", "nvidia/nemotron-3-super-120b-a12b")
+# (2026-10-22: 처음 쓰던 nemotron-3-super-120b-a12b는 카탈로그에서 내려가 404가 되어 nemotron-3-ultra-550b-a55b로 바꿨다)
+DEFAULT_GRADER = ("nvidia", "nvidia/nemotron-3-ultra-550b-a55b")
 GRADER_MAX_TOKENS = 8192  # 주장이 많은 답변의 채점 JSON은 길고, 추론 모델은 생각에도 토큰을 쓴다
 GRADER_TIMEOUT = 300  # 초. 추론 모델의 긴 채점은 기본 60초 읽기 제한에 걸린다
 
