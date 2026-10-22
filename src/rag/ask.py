@@ -25,8 +25,7 @@ def main() -> None:
     search_fn = (lambda q, k: search_with_mode(q, k, mode=args.query_mode)) if args.query_mode else search_with_mode
     result = answer(args.question, k=args.k, llm=get_llm(provider, model), search_fn=search_fn, gate_mode=args.gate_mode)
     if result["verdict"]:
-        print(f"[근거 판정] {result['verdict']}: {result['judge_reason']}
-")
+        print(f"[근거 판정] {result['verdict']}: {result['judge_reason']}\n")
     print(result["answer"])
     print(f"\n(검색 1위 점수 {result['top_score']:.3f}, LLM 호출 {'함' if result['used_llm'] else '안 함'})")
     if result["invalid_citations"]:

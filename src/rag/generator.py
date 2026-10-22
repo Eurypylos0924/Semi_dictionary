@@ -17,15 +17,19 @@ import os
 from src.const.config import ANSWER_TOP_K, MIN_RETRIEVAL_SCORE
 from src.rag.judge import DEFAULT_GATE_MODE, GATE_MODES, HARD_FLOOR, Judgement, judge
 from src.rag.llm import get_llm
-from src.rag.prompt import ANSWER_PROMPT, NOT_FOUND
+from src.rag.prompt import ANSWER_PROMPT, MATH_LOSS_WARNING, NOT_FOUND
 from src.rag.rewrite import search_with_mode
 
 PARTIAL_HINT = "\n\n[검토 메모]\n참고 논문으로는 질문의 일부만 답할 수 있다고 판정됐습니다. 논문에서 확인되는 부분만 답하고, 확인되지 않는 부분은 '논문에서 확인되지 않음'이라고 밝히세요."
 
 
 def format_context(papers: list[dict]) -> str:
-    """검색 결과를 [1] 제목 (연도) + 초록 형태로 번호를 붙여 이어 붙인다."""
-    return "\n\n".join(f"[{i}] {p['title']} ({p['year']})\n{p['summary']}" for i, p in enumerate(papers, start=1))
+    """검색 결과를 [1] 제목 (연도) + 초록 형태로 번호를 붙여 이어 붙인다. 수식·수치가 빠진 초록(math_loss)에는 경고를 붙인다."""
+    blocks = []
+    for i, p in enumerate(papers, start=1):
+        warning = f"\n{MATH_LOSS_WARNING}" if p.get("math_loss") else ""
+        blocks.append(f"[{i}] {p['title']} ({p['year']}){warning}\n{p['summary']}")
+    return "\n\n".join(blocks)
 
 
 def extract_citations(answer: str, n_papers: int) -> tuple[list[int], list[int]]:
