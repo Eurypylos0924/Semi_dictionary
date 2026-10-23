@@ -18,7 +18,7 @@ uv run python -m src.vectorstore.build --rebuild  # 코퍼스를 바꿨을 때 �
 초록`) | 초록이 평균 약 1,150자라 따로 쪼갤 필요가 없다 |
 | 임베딩 | NVIDIA `nemotron-3-embed-1b` (2048차원, 무료 API) | 한국어 질문으로 영어 논문을 찾을 수 있다. 키는 `.env`의 `nvidiaapi_key` |
 | 정규화 | 벡터 길이를 1로 맞춤 | 내적(inner product)이 곧 코사인 유사도가 된다 |
-| 인덱스 | FAISS `IndexFlatIP` (정확 검색) | 논문 322건 규모라 근사 검색이 필요 없다 |
+| 인덱스 | FAISS `IndexFlatIP` (정확 검색) | 논문 314건 규모라 근사 검색이 필요 없다 |
 | 긴 입력 | `truncate="END"` | 모델 한도를 넘으면 오류 대신 뒷부분을 자른다 |
 | 재사용 | 인덱스는 한 번 만들고 검색 때는 파일만 읽음 | 질문 1건당 임베딩 API는 1번만 호출 |
 
