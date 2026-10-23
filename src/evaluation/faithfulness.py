@@ -54,6 +54,9 @@ GRADER_TIMEOUT = 300  # 초. 추론 모델의 긴 채점은 기본 60초 읽기 
 CONFIGS: dict[str, dict] = {
     "baseline": {"query_mode": "original", "gate_mode": "score", "provider": None, "model": None},
     "max_judge": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None},
+    # 근거로 넘기는 논문 수(k)를 늘린 설정: 정답 논문을 더 많이 담아 완결성이 오르는지, 컨텍스트가 길어져 충실도가 떨어지는지 본다
+    "max_judge_k8": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "k": 8},
+    "max_judge_k10": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "k": 10},
 }
 
 
