@@ -34,6 +34,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel, Field, field_validator
 
+from src.const.config import DOCS_PATH
 from src.evaluation.retrieval_eval import RESULTS_DIR, load_questions
 from src.rag.generator import answer, format_context
 from src.rag.llm import get_llm, resolve
@@ -44,7 +45,8 @@ SETS = {"field": Path("src/evaluation/questions_field.jsonl"), "original": Path(
 ANSWER_CACHE = Path("data/cache/faithfulness_answers.jsonl")
 GRADE_CACHE = Path("data/cache/faithfulness_grades.jsonl")
 # 채점은 답변을 만든 모델(Gemini flash-lite)과 다른 제공자로 한다(자기 평가 편향을 줄이고 Gemini 무료 등급의 일일 한도를 피함)
-DEFAULT_GRADER = ("nvidia", "nvidia/nemotron-3-super-120b-a12b")
+# (2026-10-22: 처음 쓰던 nemotron-3-super-120b-a12b는 카탈로그에서 내려가 404가 되어 nemotron-3-ultra-550b-a55b로 바꿨다)
+DEFAULT_GRADER = ("nvidia", "nvidia/nemotron-3-ultra-550b-a55b")
 GRADER_MAX_TOKENS = 8192  # 주장이 많은 답변의 채점 JSON은 길고, 추론 모델은 생각에도 토큰을 쓴다
 GRADER_TIMEOUT = 300  # 초. 추론 모델의 긴 채점은 기본 60초 읽기 제한에 걸린다
 
@@ -188,10 +190,19 @@ def with_retry(fn: Callable, tries: int = 5, base: float = 20.0):
 # ---- 답변 생성 -----------------------------------------------------------------------------------------------
 
 
+def corpus_fingerprint(docs_path: Path = DOCS_PATH) -> str:
+    """검색 대상 코퍼스의 지문: 논문 목록과 math_loss 표시가 같으면 같다. 코퍼스가 바뀌면 낡은 답변 캐시를 쓰지 않게 키에 넣는다."""
+    if not docs_path.exists():
+        return ""
+    with docs_path.open(encoding="utf-8") as f:
+        rows = [json.loads(line) for line in f]
+    return sha(*sorted(f"{p['doc_id']}:{len(p.get('math_loss') or [])}" for p in rows))
+
+
 def generate(config_name: str, question: dict, cache_path: Path = ANSWER_CACHE) -> dict:
     cfg = CONFIGS[config_name]
     provider, model = resolve(cfg["provider"], cfg["model"])
-    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], SYSTEM_PROMPT, question["question"])
+    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], SYSTEM_PROMPT, corpus_fingerprint(), question["question"])
     cached = read_cache(cache_path).get(key)
     if cached:
         return cached
@@ -204,7 +215,7 @@ def generate(config_name: str, question: dict, cache_path: Path = ANSWER_CACHE) 
             gate_mode=cfg["gate_mode"],
         )
     )
-    keep = ("doc_id", "title", "year", "summary", "score", "source_url")
+    keep = ("doc_id", "title", "year", "summary", "score", "source_url", "math_loss")  # math_loss: 채점기도 답변 때와 같은 컨텍스트(경고 포함)를 보게 한다
     record = {
         "answer": result["answer"],
         "retrieved": [{k: p.get(k) for k in keep} for p in result["retrieved"]],

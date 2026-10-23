@@ -6,6 +6,7 @@ from src.evaluation.faithfulness import (
     PointCoverage,
     aggregate,
     is_limitation,
+    corpus_fingerprint,
     coverage_score,
     problem_claims,
     read_cache,
@@ -96,3 +97,28 @@ def test_aggregate_can_drop_limitation_statements_from_the_claim_count():
     raw, filtered = aggregate(records), aggregate(records, drop_limitations=True)
     assert raw["claims"] == 2 and raw["hallucination_rate"] == pytest.approx(0.5)
     assert filtered["claims"] == 1 and filtered["hallucination_rate"] == 0.0
+
+
+def _write_docs(path, rows):
+    import json
+
+    path.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+
+
+def test_corpus_fingerprint_changes_with_papers_and_math_loss_flags_only(tmp_path):
+    docs = tmp_path / "meta.jsonl"
+    _write_docs(docs, [{"doc_id": "A"}, {"doc_id": "B"}])
+    base = corpus_fingerprint(docs)
+
+    _write_docs(docs, [{"doc_id": "B"}, {"doc_id": "A"}])  # 순서만 다름
+    assert corpus_fingerprint(docs) == base
+
+    _write_docs(docs, [{"doc_id": "A"}])  # 논문이 빠짐
+    assert corpus_fingerprint(docs) != base
+
+    _write_docs(docs, [{"doc_id": "A"}, {"doc_id": "B", "math_loss": ["값 누락"]}])  # 표시가 붙음
+    assert corpus_fingerprint(docs) != base
+
+
+def test_corpus_fingerprint_is_empty_without_index(tmp_path):
+    assert corpus_fingerprint(tmp_path / "none.jsonl") == ""
