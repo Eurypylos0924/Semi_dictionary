@@ -18,7 +18,7 @@
 
 | 수집기 | 출처 | 상태 |
 | --- | --- | --- |
-| `src/collector/openalex_collect.py` | OpenAlex 공식 API (학술지 포함) | 사용 중 — 356건 수집 (정제 후 322건) |
+| `src/collector/openalex_collect.py` | OpenAlex 공식 API (학술지 포함) | 사용 중 — 356건 수집 (정제 후 314건) |
 | `src/collector/arxiv_collect.py` | arXiv 공식 API | 이 네트워크 IP에서 429(rate limit)로 수집 실패, 네트워크가 바뀌면 재시도 |
 
 ## 동작 방식
