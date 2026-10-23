@@ -34,7 +34,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel, Field, field_validator
 
-from src.const.config import DOCS_PATH
+from src.const.config import ANSWER_TOP_K, DOCS_PATH
 from src.evaluation.retrieval_eval import RESULTS_DIR, load_questions
 from src.rag.generator import answer, format_context
 from src.rag.llm import get_llm, resolve
@@ -202,7 +202,9 @@ def corpus_fingerprint(docs_path: Path = DOCS_PATH) -> str:
 def generate(config_name: str, question: dict, cache_path: Path = ANSWER_CACHE) -> dict:
     cfg = CONFIGS[config_name]
     provider, model = resolve(cfg["provider"], cfg["model"])
-    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], SYSTEM_PROMPT, corpus_fingerprint(), question["question"])
+    k = cfg.get("k", ANSWER_TOP_K)
+    k_part = [f"k={k}"] if k != ANSWER_TOP_K else []  # 기본 k는 키에 넣지 않아 기존 캐시를 그대로 쓴다
+    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], SYSTEM_PROMPT, corpus_fingerprint(), *k_part, question["question"])
     cached = read_cache(cache_path).get(key)
     if cached:
         return cached
@@ -210,6 +212,7 @@ def generate(config_name: str, question: dict, cache_path: Path = ANSWER_CACHE) 
     result = with_retry(
         lambda: answer(
             question["question"],
+            k=k,
             llm=llm,
             search_fn=lambda q, k: search_with_mode(q, k, mode=cfg["query_mode"]),
             gate_mode=cfg["gate_mode"],

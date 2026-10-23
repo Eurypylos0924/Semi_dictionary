@@ -122,3 +122,12 @@ def test_corpus_fingerprint_changes_with_papers_and_math_loss_flags_only(tmp_pat
 
 def test_corpus_fingerprint_is_empty_without_index(tmp_path):
     assert corpus_fingerprint(tmp_path / "none.jsonl") == ""
+
+
+def test_k_experiment_configs_only_change_k():
+    from src.evaluation.faithfulness import CONFIGS
+
+    base = {key: v for key, v in CONFIGS["max_judge"].items() if key != "k"}
+    for name in ("max_judge_k8", "max_judge_k10"):
+        assert {key: v for key, v in CONFIGS[name].items() if key != "k"} == base
+        assert CONFIGS[name]["k"] > 5
