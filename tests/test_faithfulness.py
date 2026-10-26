@@ -131,3 +131,21 @@ def test_k_experiment_configs_only_change_k():
     for name in ("max_judge_k8", "max_judge_k10"):
         assert {key: v for key, v in CONFIGS[name].items() if key != "k"} == base
         assert CONFIGS[name]["k"] > 5
+
+
+def test_nolimit_prompt_changes_only_rule_9():
+    from src.evaluation.faithfulness import RULE_9, variant_prompt, variant_system_prompt
+    from src.rag.prompt import ANSWER_PROMPT, SYSTEM_PROMPT
+
+    assert variant_system_prompt(None) == SYSTEM_PROMPT and variant_prompt(None) is ANSWER_PROMPT
+    changed = variant_system_prompt("nolimit")
+    assert "8문장" not in changed and "길이 제한은 없습니다" in changed
+    assert changed.replace(changed.split("\n9. ")[1].split("\n10.")[0], RULE_9.removeprefix("9. ")) == SYSTEM_PROMPT  # 규칙 9 외에는 같다
+    values = {"context": "C", "question": "Q", "hint": ""}
+    assert variant_prompt("nolimit").format_messages(**values)[1].content == ANSWER_PROMPT.format_messages(**values)[1].content
+
+
+def test_nolimit_config_declares_the_prompt_variant():
+    from src.evaluation.faithfulness import CONFIGS
+
+    assert CONFIGS["max_judge_nolimit"]["prompt"] == "nolimit" and "prompt" not in CONFIGS["max_judge"]
