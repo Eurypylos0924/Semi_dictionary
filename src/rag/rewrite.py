@@ -24,7 +24,7 @@ from src.rag.llm import get_llm, resolve
 from src.rag.retriever import search, search_queries
 
 MODES = ("original", "rewrite", "max")
-DEFAULT_MODE = "original"  # 측정 결과를 보고 바꾼다 (docs/rag.md 참고)
+DEFAULT_MODE = "max"  # 2026-10-26: 현업 표현 질문에서 게이트 거짓 거절을 없애고 Hit@1을 올려 기본으로 바꿨다 (docs/rag.md 참고)
 CACHE_PATH = Path("data/cache/rewrites.jsonl")
 
 REWRITE_SYSTEM = """당신은 반도체·디스플레이 박막 공정(원자층 증착 ALD, HfO2 같은 고유전율 절연막, XRD 결정성 분석, CMP, 웨이퍼맵·수율 분석) 논문 초록을 검색하는 검색어 작성기입니다.

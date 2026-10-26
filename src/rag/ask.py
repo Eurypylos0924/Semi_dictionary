@@ -16,8 +16,8 @@ def main() -> None:
     parser.add_argument("-k", type=int, default=5, help="근거로 검토할 논문 수")
     parser.add_argument("--provider", help="gemini | nvidia | ollama (기본: 환경변수 LLM_PROVIDER 또는 설정값)")
     parser.add_argument("--model", help="모델 이름 (기본: 제공자별 기본 모델)")
-    parser.add_argument("--gate-mode", choices=["score", "judge"], help="근거 없음 판단 방식 (기본: 환경변수 GATE_MODE 또는 score)")
-    parser.add_argument("--query-mode", choices=["original", "rewrite", "max"], help="검색 방식 (기본: 환경변수 QUERY_MODE 또는 original)")
+    parser.add_argument("--gate-mode", choices=["score", "judge"], help="근거 없음 판단 방식 (기본: 환경변수 GATE_MODE 또는 judge)")
+    parser.add_argument("--query-mode", choices=["original", "rewrite", "max"], help="검색 방식 (기본: 환경변수 QUERY_MODE 또는 max)")
     args = parser.parse_args()
 
     provider, model = resolve(args.provider, args.model)
