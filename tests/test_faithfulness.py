@@ -133,14 +133,18 @@ def test_k_experiment_configs_only_change_k():
         assert CONFIGS[name]["k"] > 5
 
 
-def test_nolimit_prompt_changes_only_rule_9():
-    from src.evaluation.faithfulness import RULE_9, variant_prompt, variant_system_prompt
+def test_prompt_variants_change_only_the_rule_9_line():
+    from src.evaluation.faithfulness import PROMPT_VARIANTS, variant_prompt, variant_system_prompt
     from src.rag.prompt import ANSWER_PROMPT, SYSTEM_PROMPT
 
     assert variant_system_prompt(None) == SYSTEM_PROMPT and variant_prompt(None) is ANSWER_PROMPT
-    changed = variant_system_prompt("nolimit")
-    assert "8문장" not in changed and "길이 제한은 없습니다" in changed
-    assert changed.replace(changed.split("\n9. ")[1].split("\n10.")[0], RULE_9.removeprefix("9. ")) == SYSTEM_PROMPT  # 규칙 9 외에는 같다
+    for name, rule in PROMPT_VARIANTS.items():
+        changed = variant_system_prompt(name).split(chr(10))
+        base = SYSTEM_PROMPT.split(chr(10))
+        assert len(changed) == len(base)
+        diff = [(a, b) for a, b in zip(base, changed) if a != b]
+        assert all(a.startswith("9. ") and b == rule for a, b in diff)  # 다른 줄은 같고, 달라진 줄은 규칙 9뿐
+    assert "8문장" in variant_system_prompt("limit8") and "8문장" not in variant_system_prompt("nolimit")
     values = {"context": "C", "question": "Q", "hint": ""}
     assert variant_prompt("nolimit").format_messages(**values)[1].content == ANSWER_PROMPT.format_messages(**values)[1].content
 
