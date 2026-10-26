@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 from src.rag.llm import get_llm, resolve
 
 GATE_MODES = ("score", "judge")
-DEFAULT_GATE_MODE = "score"  # 측정 결과를 보고 바꾼다 (docs/rag.md 참고)
+DEFAULT_GATE_MODE = "judge"  # 2026-10-26: max 검색과 함께 써야 부분 일치 범위 밖 질문을 막는다 (docs/rag.md 참고)
 HARD_FLOOR = 0.15  # 검색 1위 점수가 이보다 낮으면 LLM 판정 없이 거절. 평가 질문에서 관찰된 답 있는 질문의 최소(0.194)보다 낮게 둔 잠정값
 CACHE_PATH = Path("data/cache/judgements.jsonl")
 

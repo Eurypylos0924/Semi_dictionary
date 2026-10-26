@@ -91,3 +91,15 @@ def test_every_rag_module_compiles():
 
     for path in Path(__file__).resolve().parents[1].joinpath("src", "rag").glob("*.py"):
         py_compile.compile(str(path), doraise=True)
+
+
+def test_defaults_are_max_search_with_judge_gate(monkeypatch):
+    # 2026-10-26 측정으로 정한 기본 조합. 환경변수가 없으면 이 조합으로 동작해야 한다
+    monkeypatch.delenv("GATE_MODE", raising=False)
+    monkeypatch.delenv("QUERY_MODE", raising=False)
+    from src.rag import judge, rewrite
+
+    assert rewrite.DEFAULT_MODE == "max" and judge.DEFAULT_GATE_MODE == "judge"
+    verdict = judge.Judgement(verdict="none", relevant=[], reason="질문이 묻는 관계가 없음")
+    result = answer("질문", search_fn=fake_search([paper(1, score=0.5)]), llm=ExplodingLLM(), judge_fn=lambda *a, **k: verdict)
+    assert result["gate_mode"] == "judge" and result["used_llm"] is False and result["verdict"] == "none"
