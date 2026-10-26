@@ -1,5 +1,5 @@
 ## 영역
-<!-- collector / preprocessing / vectorstore / rag / evaluation / general -->
+<!-- collector / preprocessing / vectorstore / rag / evaluation / app / general -->
 
 ## 요약
 
