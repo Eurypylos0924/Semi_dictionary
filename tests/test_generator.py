@@ -103,3 +103,9 @@ def test_defaults_are_max_search_with_judge_gate(monkeypatch):
     verdict = judge.Judgement(verdict="none", relevant=[], reason="질문이 묻는 관계가 없음")
     result = answer("질문", search_fn=fake_search([paper(1, score=0.5)]), llm=ExplodingLLM(), judge_fn=lambda *a, **k: verdict)
     assert result["gate_mode"] == "judge" and result["used_llm"] is False and result["verdict"] == "none"
+
+
+def test_answer_length_is_not_capped_in_the_system_prompt():
+    # 2026-10-27: "8문장 이내"가 완결성을 깎는다는 측정(docs/evaluation.md) 때문에 풀었다. 되돌리려면 이 테스트와 문서를 함께 고친다
+    assert "8문장" not in SYSTEM_PROMPT and "길이 제한은 없습니다" in SYSTEM_PROMPT
+    assert "초록에 없는 수치·사실·조건은 만들지 않습니다" in SYSTEM_PROMPT  # 길이를 풀어도 근거 규칙은 그대로
