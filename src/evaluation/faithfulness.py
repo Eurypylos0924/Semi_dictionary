@@ -26,6 +26,7 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 from typing import Callable, Literal
+from unittest.mock import patch
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import HumanMessage
@@ -36,9 +37,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.const.config import ANSWER_TOP_K, DOCS_PATH
 from src.evaluation.retrieval_eval import RESULTS_DIR, load_questions
+from src.rag import generator
 from src.rag.generator import answer, format_context
 from src.rag.llm import get_llm, resolve
-from src.rag.prompt import NOT_FOUND, SYSTEM_PROMPT
+from src.rag.prompt import ANSWER_PROMPT, NOT_FOUND, SYSTEM_PROMPT
 from src.rag.rewrite import search_with_mode
 
 SETS = {"field": Path("src/evaluation/questions_field.jsonl"), "original": Path("src/evaluation/questions.jsonl")}
@@ -57,7 +59,36 @@ CONFIGS: dict[str, dict] = {
     # 근거로 넘기는 논문 수(k)를 늘린 설정: 정답 논문을 더 많이 담아 완결성이 오르는지, 컨텍스트가 길어져 충실도가 떨어지는지 본다
     "max_judge_k8": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "k": 8},
     "max_judge_k10": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "k": 10},
+    # 프롬프트 규칙 9의 "8문장 이내"를 푼 설정: 완결성의 병목이 검색이 아니라 답변 생성(길이 제한)인지 본다.
+    # (2026-10-27 rag가 이 문구를 기본 규칙 9로 채택해 nolimit은 기본 프롬프트와 같아졌다. 옛 8문장 규칙은 limit8로 다시 만들 수 있다)
+    "max_judge_limit8": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "prompt": "limit8"},
+    "max_judge_nolimit": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "prompt": "nolimit"},
+    "max_judge_nolimit_k10": {"query_mode": "max", "gate_mode": "judge", "provider": None, "model": None, "prompt": "nolimit", "k": 10},
 }
+
+# 규칙 9만 바꾼다(나머지 규칙, 컨텍스트, 검색, 게이트는 그대로). 근거 없는 내용을 늘리지 않도록 "초록에 있는 내용만"은 규칙 1이 그대로 지킨다.
+# 기본 SYSTEM_PROMPT의 규칙 9가 어떤 문구든 "9. "로 시작하는 줄을 통째로 바꾸므로, rag의 기본 규칙이 바뀌어도 변형은 그대로 쓸 수 있다
+PROMPT_VARIANTS = {
+    "limit8": '9. 답변은 핵심부터 간결하게 씁니다 (8문장 이내). "근거에 기반한다" 같은 자기 평가 문장은 쓰지 않습니다.',
+    "nolimit": '9. 답변은 핵심부터 쓰되, 참고 논문들이 말하는 서로 다른 내용(원인, 조건, 결과, 한계)을 빠짐없이 담습니다. 길이 제한은 없습니다. "근거에 기반한다" 같은 자기 평가 문장은 쓰지 않습니다.',
+}
+RULE_9_LINE = re.compile(r"^9\. .*$", re.MULTILINE)
+
+
+def variant_prompt(name: str | None) -> ChatPromptTemplate:
+    """답변 프롬프트의 변형. system 메시지만 바꾸고 사용자 메시지 틀(참고 논문·질문·힌트)은 원본 ANSWER_PROMPT 것을 그대로 쓴다."""
+    if not name:
+        return ANSWER_PROMPT
+    return ChatPromptTemplate.from_messages([("system", variant_system_prompt(name)), ANSWER_PROMPT.messages[1]])
+
+
+def variant_system_prompt(name: str | None) -> str:
+    """설정의 프롬프트 변형 이름에 해당하는 system 메시지. 이름이 없으면 기본 SYSTEM_PROMPT."""
+    if not name:
+        return SYSTEM_PROMPT
+    text, replaced = RULE_9_LINE.subn(lambda _: PROMPT_VARIANTS[name], SYSTEM_PROMPT)
+    assert replaced == 1, "기본 프롬프트에서 규칙 9 줄을 하나만 찾아야 한다"
+    return text
 
 
 def get_grader(provider: str, model: str):
@@ -207,20 +238,22 @@ def generate(config_name: str, question: dict, cache_path: Path = ANSWER_CACHE) 
     provider, model = resolve(cfg["provider"], cfg["model"])
     k = cfg.get("k", ANSWER_TOP_K)
     k_part = [f"k={k}"] if k != ANSWER_TOP_K else []  # 기본 k는 키에 넣지 않아 기존 캐시를 그대로 쓴다
-    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], SYSTEM_PROMPT, corpus_fingerprint(), *k_part, question["question"])
+    system_prompt = variant_system_prompt(cfg.get("prompt"))
+    key = sha(config_name, provider, model, cfg["query_mode"], cfg["gate_mode"], system_prompt, corpus_fingerprint(), *k_part, question["question"])
     cached = read_cache(cache_path).get(key)
     if cached:
         return cached
     llm = get_llm(provider, model)
-    result = with_retry(
-        lambda: answer(
-            question["question"],
-            k=k,
-            llm=llm,
-            search_fn=lambda q, k: search_with_mode(q, k, mode=cfg["query_mode"]),
-            gate_mode=cfg["gate_mode"],
+    with patch.object(generator, "ANSWER_PROMPT", variant_prompt(cfg.get("prompt"))):  # 답변 단계 코드는 그대로 두고 프롬프트만 이 호출 동안 바꿔 끼운다
+        result = with_retry(
+            lambda: answer(
+                question["question"],
+                k=k,
+                llm=llm,
+                search_fn=lambda q, k: search_with_mode(q, k, mode=cfg["query_mode"]),
+                gate_mode=cfg["gate_mode"],
+            )
         )
-    )
     keep = ("doc_id", "title", "year", "summary", "score", "source_url", "math_loss")  # math_loss: 채점기도 답변 때와 같은 컨텍스트(경고 포함)를 보게 한다
     record = {
         "answer": result["answer"],
